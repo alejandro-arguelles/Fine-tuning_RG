@@ -1,0 +1,24 @@
+{
+  "user": "Ale",
+  "run_name": "v2",
+  "base_model": "Qwen/Qwen3-0.6B-Base",
+  "method": "lora",
+  "rank": 4,
+  "target_modules": [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+    "gate_proj",
+    "up_proj",
+    "down_proj"
+  ],
+  "target_layers": null,
+  "trainable_parameters": 2523136,
+  "total_parameters": 598573056,
+  "training_examples": 2000,
+  "training_time_seconds": 362.4524874687195,
+  "peak_vram_mb": 17841.84228515625,
+  "adapter_bytes": 10149864,
+  "gsm8k_accuracy": 0.46
+}

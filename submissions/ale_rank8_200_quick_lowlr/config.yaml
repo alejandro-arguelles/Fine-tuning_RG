@@ -1,0 +1,31 @@
+user: Ale
+run_name: rank8-200ex-quickeval-lowlr
+seed: 0
+model_name: Qwen/Qwen3-0.6B-Base
+
+method: lora
+
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.05
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+  layers:
+    mode: all
+
+data:
+  max_train_examples: 200
+  max_seq_length: 512
+
+training:
+  output_dir: submissions/ale_rank8_200_quick_lowlr
+  num_train_epochs: 3
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 1
+  learning_rate: 5.0e-5
+  logging_steps: 10
+  bf16: true
+
+eval:
+  limit: 50
+  batch_size: 16
