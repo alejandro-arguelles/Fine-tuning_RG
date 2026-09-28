@@ -10,6 +10,7 @@ Usage:
 """
 
 import argparse
+import os
 import time
 
 import torch
@@ -17,7 +18,9 @@ from tqdm import tqdm
 
 from src.dataset import build_prompt, extract_gold_answer, load_gsm8k
 from src.model import BASE_MODEL_NAME, load_base_model, load_model_with_adapter, load_tokenizer
-from src.utils import answers_match, extract_predicted_answer, set_seed
+from src.utils import answers_match, extract_predicted_answer, save_json, set_seed
+
+BASELINE_PATH = "submissions/_baseline.json"
 
 MAX_NEW_TOKENS = 256
 
@@ -83,6 +86,11 @@ def main():
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--limit", type=int, default=None, help="Evaluate on a subset only")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--save-baseline",
+        action="store_true",
+        help=f"Save this run's accuracy to {BASELINE_PATH}, used by src/submit.py as baseline_accuracy",
+    )
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -104,6 +112,11 @@ def main():
 
     print(f"\nGSM8K accuracy: {accuracy:.4f} ({sum(r['correct'] for r in records)}/{len(records)})")
     print(f"Evaluation time: {elapsed:.1f}s")
+
+    if args.save_baseline:
+        os.makedirs(os.path.dirname(BASELINE_PATH), exist_ok=True)
+        save_json({"model": args.model, "gsm8k_accuracy": accuracy}, BASELINE_PATH)
+        print(f"Saved baseline accuracy to {BASELINE_PATH}")
 
 
 if __name__ == "__main__":

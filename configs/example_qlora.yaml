@@ -12,6 +12,9 @@ lora:
   alpha: 32
   dropout: 0.05
   target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
+  layers:
+    mode: last_n  # all | first_n | last_n | indices
+    n: 8
 
 data:
   max_train_examples: null

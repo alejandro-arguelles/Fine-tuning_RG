@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Hugging Face cache (base model weights, datasets) — never commit these
+.cache/
+huggingface/
+
+# Training checkpoints — only the final adapter/ and results.json get committed
+submissions/*/checkpoints/

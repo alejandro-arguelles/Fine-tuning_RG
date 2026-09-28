@@ -67,7 +67,30 @@ def collate_fn(batch, pad_token_id: int):
     }
 
 
+def resolve_lora_layers(layers_cfg: dict | None, num_hidden_layers: int) -> list[int] | None:
+    """Turn the config's `lora.layers` block into an explicit list of layer
+    indices for PEFT's `layers_to_transform` (None = every layer).
+    """
+    if not layers_cfg:
+        return None
+    mode = layers_cfg.get("mode", "all")
+    if mode == "all":
+        return None
+    if mode == "first_n":
+        return list(range(layers_cfg["n"]))
+    if mode == "last_n":
+        n = layers_cfg["n"]
+        return list(range(num_hidden_layers - n, num_hidden_layers))
+    if mode == "indices":
+        return list(layers_cfg["indices"])
+    raise ValueError(f"Unknown lora.layers mode: {mode}")
+
+
 def build_model(cfg: dict, tokenizer):
+    """Returns (model, target_layers). target_layers is the list of decoder
+    layer indices the LoRA adapters were applied to (None means "all
+    layers" or "not applicable", e.g. for full/partial FT).
+    """
     method = cfg["method"]
     model_name = cfg["model_name"]
 
@@ -75,14 +98,18 @@ def build_model(cfg: dict, tokenizer):
         from peft import LoraConfig, get_peft_model
 
         model = load_base_model(model_name)
+        target_layers = resolve_lora_layers(
+            cfg["lora"].get("layers"), model.config.num_hidden_layers
+        )
         lora_cfg = LoraConfig(
             r=cfg["lora"]["r"],
             lora_alpha=cfg["lora"]["alpha"],
             lora_dropout=cfg["lora"]["dropout"],
             target_modules=cfg["lora"]["target_modules"],
+            layers_to_transform=target_layers,
             task_type="CAUSAL_LM",
         )
-        return get_peft_model(model, lora_cfg)
+        return get_peft_model(model, lora_cfg), target_layers
 
     if method == "qlora":
         from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
@@ -96,25 +123,29 @@ def build_model(cfg: dict, tokenizer):
         model = AutoModelForCausalLM.from_pretrained(
             model_name, quantization_config=bnb_config, device_map="auto"
         )
+        target_layers = resolve_lora_layers(
+            cfg["lora"].get("layers"), model.config.num_hidden_layers
+        )
         model = prepare_model_for_kbit_training(model)
         lora_cfg = LoraConfig(
             r=cfg["lora"]["r"],
             lora_alpha=cfg["lora"]["alpha"],
             lora_dropout=cfg["lora"]["dropout"],
             target_modules=cfg["lora"]["target_modules"],
+            layers_to_transform=target_layers,
             task_type="CAUSAL_LM",
         )
-        return get_peft_model(model, lora_cfg)
+        return get_peft_model(model, lora_cfg), target_layers
 
     if method == "full":
-        return load_base_model(model_name)
+        return load_base_model(model_name), None
 
     if method == "partial":
         model = load_base_model(model_name)
         patterns = cfg["partial"]["trainable_name_patterns"]
         for name, param in model.named_parameters():
             param.requires_grad = any(p in name for p in patterns)
-        return model
+        return model, None
 
     raise ValueError(f"Unknown method: {method}")
 
@@ -133,7 +164,7 @@ def main():
     shutil.copy(args.config, os.path.join(output_dir, "config.yaml"))
 
     tokenizer = load_tokenizer(cfg["model_name"])
-    model = build_model(cfg, tokenizer)
+    model, target_layers = build_model(cfg, tokenizer)
 
     train_examples = list(load_gsm8k("train"))
     max_train_examples = cfg["data"].get("max_train_examples")
@@ -190,9 +221,12 @@ def main():
 
     results = {
         "team": cfg["team"],
+        "run_name": cfg.get("run_name", os.path.basename(output_dir.rstrip("/"))),
+        "base_model": cfg["model_name"],
         "method": cfg["method"],
         "rank": cfg.get("lora", {}).get("r"),
         "target_modules": cfg.get("lora", {}).get("target_modules"),
+        "target_layers": target_layers,  # None = all layers (or not applicable for full/partial FT)
         "trainable_parameters": trainable_params,
         "total_parameters": total_params,
         "training_examples": len(train_examples),
