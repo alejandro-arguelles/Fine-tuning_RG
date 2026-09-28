@@ -1,0 +1,16 @@
+{
+  "user": "Base",
+  "run_name": "qwen3-0.6b-base-no-finetune",
+  "base_model": "Qwen/Qwen3-0.6B-Base",
+  "method": "full",
+  "rank": null,
+  "target_modules": null,
+  "target_layers": null,
+  "trainable_parameters": 0,
+  "total_parameters": 596049920,
+  "training_examples": 0,
+  "training_time_seconds": 0,
+  "peak_vram_mb": null,
+  "adapter_bytes": 0,
+  "gsm8k_accuracy": 0.4829416224412434
+}

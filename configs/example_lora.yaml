@@ -1,7 +1,7 @@
 # Example LoRA fine-tuning config.
 # Run with: python -m src.train --config configs/example_lora.yaml
 
-team: example
+user: example
 seed: 0
 model_name: Qwen/Qwen3-0.6B-Base
 

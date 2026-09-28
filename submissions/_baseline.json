@@ -1,4 +1,4 @@
 {
   "model": "Qwen/Qwen3-0.6B-Base",
-  "gsm8k_accuracy": 0.44
+  "gsm8k_accuracy": 0.4829416224412434
 }

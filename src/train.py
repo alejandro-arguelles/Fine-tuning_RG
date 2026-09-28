@@ -220,7 +220,7 @@ def main():
     )
 
     results = {
-        "team": cfg["team"],
+        "user": cfg["user"],
         "run_name": cfg.get("run_name", os.path.basename(output_dir.rstrip("/"))),
         "base_model": cfg["model_name"],
         "method": cfg["method"],
