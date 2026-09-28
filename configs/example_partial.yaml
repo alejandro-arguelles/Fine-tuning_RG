@@ -1,0 +1,31 @@
+# Example partial fine-tuning config: only unfreeze the last N transformer
+# layers, train everything else frozen. Run with:
+#   python -m src.train --config configs/example_partial.yaml
+
+team: example
+seed: 0
+model_name: Qwen/Qwen3-0.6B-Base
+
+method: partial  # lora | qlora | full | partial
+
+partial:
+  # Any parameter whose name contains one of these substrings stays
+  # trainable; everything else is frozen.
+  trainable_name_patterns: ["layers.26", "layers.27", "norm"]
+
+data:
+  max_train_examples: null
+  max_seq_length: 512
+
+training:
+  output_dir: submissions/example_partial
+  num_train_epochs: 3
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 2
+  learning_rate: 1.0e-5
+  logging_steps: 10
+  bf16: true
+
+eval:
+  limit: null
+  batch_size: 16
