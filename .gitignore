@@ -11,3 +11,5 @@ huggingface/
 
 # Training checkpoints — only the final adapter/ and results.json get committed
 submissions/*/checkpoints/
+
+ale_arith*
