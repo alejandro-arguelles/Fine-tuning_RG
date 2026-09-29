@@ -6,6 +6,15 @@ user: example
 seed: 0
 model_name: Qwen/Qwen3-0.6B-Base
 
+arithmetic:
+  ops: mul  # mul | addsub
+  min_digits: 2  # digits per operand in train
+  max_digits: 5
+  test_min_digits: 2  # digits per operand in test (6 = beyond the training range)
+  test_max_digits: 6
+  n_train: 4000
+  n_test: 300
+
 method: partial  # lora | qlora | full | partial
 
 partial:
@@ -15,7 +24,7 @@ partial:
 
 data:
   max_train_examples: null
-  max_seq_length: 512
+  max_seq_length: 640
 
 training:
   output_dir: submissions/example_partial
@@ -28,4 +37,6 @@ training:
 
 eval:
   limit: null
-  batch_size: 16
+  batch_size: 50
+  temperature: 0  # 0 = greedy
+  max_new_tokens: 512

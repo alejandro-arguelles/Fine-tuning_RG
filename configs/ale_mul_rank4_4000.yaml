@@ -1,0 +1,42 @@
+user: Ale
+run_name: mul-rank4-4000ex
+seed: 0
+model_name: Qwen/Qwen3-0.6B-Base
+
+arithmetic:
+  ops: mul
+  min_digits: 2
+  max_digits: 5
+  test_min_digits: 2
+  test_max_digits: 6
+  n_train: 4000
+  n_test: 300
+
+method: lora
+
+lora:
+  r: 4
+  alpha: 8
+  dropout: 0.05
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+  layers:
+    mode: all
+
+data:
+  max_train_examples: 4000
+  max_seq_length: 640
+
+training:
+  output_dir: submissions/ale_mul_rank4_4000
+  num_train_epochs: 2
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 2
+  learning_rate: 2.0e-4
+  logging_steps: 20
+  bf16: true
+
+eval:
+  limit: 300
+  batch_size: 50
+  temperature: 0
+  max_new_tokens: 512

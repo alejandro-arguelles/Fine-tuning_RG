@@ -20,7 +20,7 @@ def set_seed(seed: int = 0):
 def extract_predicted_answer(generated_text: str) -> str | None:
     """Pull the final number out of a model completion.
 
-    Looks for a GSM8K-style "#### <number>" tag first; if absent, falls
+    Looks for a "#### <number>" tag first; if absent, falls
     back to the last number that appears in the text. Returns None if no
     number is found at all.
     """

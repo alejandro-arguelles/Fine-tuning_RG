@@ -1,12 +1,12 @@
-"""Official GSM8K evaluator.
+"""Official arithmetic evaluator.
 
 Fixed prompt, fixed decoding, fixed answer extraction — this script must
 stay identical for every submission so accuracy numbers are comparable.
 Do not modify it as part of a fine-tuning submission.
 
 Usage:
-    python -m src.evaluate --model Qwen/Qwen3-0.6B-Base
-    python -m src.evaluate --model Qwen/Qwen3-0.6B-Base --adapter path/to/adapter
+    python -m src.evaluate --config configs/ale_mul_rank8_8000.yaml
+    python -m src.evaluate --config configs/ale_mul_rank8_8000.yaml --adapter path/to/adapter
 """
 
 import argparse
@@ -14,15 +14,16 @@ import os
 import time
 
 import torch
+import yaml
 from tqdm import tqdm
 
-from src.dataset import build_prompt, extract_gold_answer, load_gsm8k
+from src.dataset import build_prompt, configure, extract_gold_answer, load_split
 from src.model import BASE_MODEL_NAME, load_base_model, load_model_with_adapter, load_tokenizer
 from src.utils import answers_match, extract_predicted_answer, save_json, set_seed
 
 BASELINE_PATH = "submissions/_baseline.json"
 
-MAX_NEW_TOKENS = 256
+MAX_NEW_TOKENS = 512
 
 
 @torch.no_grad()
@@ -32,6 +33,7 @@ def run_evaluation(
     examples,
     batch_size: int = 8,
     max_new_tokens: int = MAX_NEW_TOKENS,
+    temperature: float = 0,
 ):
     model.eval()
     tokenizer.padding_side = "left"
@@ -45,13 +47,15 @@ def run_evaluation(
         golds = [extract_gold_answer(ex["answer"]) for ex in batch]
 
         inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(model.device)
+        if temperature > 0:
+            sampling = dict(do_sample=True, temperature=temperature, top_k=20, top_p=0.8)
+        else:
+            sampling = dict(do_sample=False, temperature=None, top_p=None, top_k=None)
         outputs = model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
-            do_sample=False,
-            temperature=None,
-            top_p=None,
             pad_token_id=tokenizer.pad_token_id,
+            **sampling,
         )
 
         completions = tokenizer.batch_decode(
@@ -80,12 +84,19 @@ def run_evaluation(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate a model on GSM8K.")
+    parser = argparse.ArgumentParser(description="Evaluate a model on synthetic arithmetic.")
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Training config whose `arithmetic:` block defines the test split",
+    )
     parser.add_argument("--model", default=BASE_MODEL_NAME)
     parser.add_argument("--adapter", default=None, help="Path to a LoRA/QLoRA adapter")
-    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--batch-size", type=int, default=50)
     parser.add_argument("--limit", type=int, default=None, help="Evaluate on a subset only")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--max-new-tokens", type=int, default=MAX_NEW_TOKENS)
+    parser.add_argument("--temperature", type=float, default=0, help="0 = greedy")
     parser.add_argument(
         "--save-baseline",
         action="store_true",
@@ -94,6 +105,8 @@ def main():
     args = parser.parse_args()
 
     set_seed(args.seed)
+    with open(args.config) as f:
+        configure(**yaml.safe_load(f).get("arithmetic", {}))
 
     tokenizer = load_tokenizer(args.model)
     if args.adapter:
@@ -101,21 +114,29 @@ def main():
     else:
         model = load_base_model(args.model)
 
-    test_set = load_gsm8k("test")
+    examples = load_split("test")
     if args.limit:
-        test_set = test_set.select(range(args.limit))
-    examples = list(test_set)
+        examples = examples[: args.limit]
 
     start_time = time.time()
-    accuracy, records = run_evaluation(model, tokenizer, examples, batch_size=args.batch_size)
+    accuracy, records = run_evaluation(
+        model,
+        tokenizer,
+        examples,
+        batch_size=args.batch_size,
+        max_new_tokens=args.max_new_tokens,
+        temperature=args.temperature,
+    )
     elapsed = time.time() - start_time
 
-    print(f"\nGSM8K accuracy: {accuracy:.4f} ({sum(r['correct'] for r in records)}/{len(records)})")
+    print(f"\nAccuracy: {accuracy:.4f} ({sum(r['correct'] for r in records)}/{len(records)})")
     print(f"Evaluation time: {elapsed:.1f}s")
 
     if args.save_baseline:
         os.makedirs(os.path.dirname(BASELINE_PATH), exist_ok=True)
-        save_json({"model": args.model, "gsm8k_accuracy": accuracy}, BASELINE_PATH)
+        save_json(
+            {"model": args.model, "task": "arithmetic", "accuracy": accuracy}, BASELINE_PATH
+        )
         print(f"Saved baseline accuracy to {BASELINE_PATH}")
 
 

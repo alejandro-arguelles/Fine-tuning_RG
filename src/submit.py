@@ -48,9 +48,10 @@ def load_baseline_accuracy(base_model: str, baseline_path: str) -> float:
             f"not '{base_model}'. Re-run:\n"
             f"  python -m src.evaluate --model {base_model} --save-baseline"
         )
-    return baseline["gsm8k_accuracy"]
+    return baseline["accuracy"]
 
 
+# The API has no `task` field: put the task in run_name (e.g. "... (multiplication 2-6 digits)").
 def build_payload(results: dict, student: str, run_name: str, baseline_accuracy: float) -> dict:
     payload = {
         "student": student,
@@ -59,7 +60,7 @@ def build_payload(results: dict, student: str, run_name: str, baseline_accuracy:
         "method": METHOD_MAP[results["method"]],
         "trainable_parameters": results["trainable_parameters"],
         "total_parameters": results["total_parameters"],
-        "gsm8k_accuracy": results["gsm8k_accuracy"],
+        "accuracy": results["accuracy"],
         "baseline_accuracy": baseline_accuracy,
     }
     if results.get("rank") is not None:

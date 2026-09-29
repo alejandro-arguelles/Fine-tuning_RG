@@ -5,6 +5,15 @@ user: example
 seed: 0
 model_name: Qwen/Qwen3-0.6B-Base
 
+arithmetic:
+  ops: mul  # mul | addsub
+  min_digits: 2  # digits per operand in train
+  max_digits: 5
+  test_min_digits: 2  # digits per operand in test (6 = beyond the training range)
+  test_max_digits: 6
+  n_train: 200
+  n_test: 50
+
 method: lora  # lora | qlora | full | partial
 
 lora:
@@ -18,8 +27,8 @@ lora:
     # indices: []   # used when mode is indices, e.g. [0, 1, 26, 27]
 
 data:
-  max_train_examples: 200  # small subset, so this example runs fast as a demo
-  max_seq_length: 512
+  max_train_examples: null
+  max_seq_length: 640
 
 training:
   output_dir: submissions/example_lora
@@ -31,5 +40,7 @@ training:
   bf16: true
 
 eval:
-  limit: 200  # small subset for a quick demo; a real submission should use the full test split (null)
-  batch_size: 16
+  limit: null
+  batch_size: 50
+  temperature: 0  # 0 = greedy
+  max_new_tokens: 512

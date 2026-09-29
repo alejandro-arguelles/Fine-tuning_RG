@@ -3,7 +3,7 @@
 Participants edit/extend this file freely. What must stay fixed for a
 submission to be comparable is: the dataset (src/dataset.py), the base
 model, and the evaluator (src/evaluate.py) used at the end of this script
-to produce gsm8k_accuracy.
+to produce accuracy.
 
 Usage:
     python -m src.train --config configs/example_lora.yaml
@@ -19,13 +19,13 @@ import yaml
 from torch.utils.data import Dataset
 from transformers import Trainer, TrainingArguments
 
-from src.dataset import build_prompt, build_training_target, load_gsm8k
+from src.dataset import build_prompt, build_training_target, configure, load_split
 from src.evaluate import run_evaluation
 from src.model import load_base_model, load_tokenizer
 from src.utils import count_parameters, save_json, set_seed
 
 
-class GSM8KSFTDataset(Dataset):
+class ArithmeticSFTDataset(Dataset):
     """Tokenizes (prompt, target) pairs and masks the prompt tokens out of
     the loss so the model is only trained to produce the completion.
     """
@@ -151,7 +151,7 @@ def build_model(cfg: dict, tokenizer):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fine-tune Qwen3-0.6B-Base on GSM8K.")
+    parser = argparse.ArgumentParser(description="Fine-tune Qwen3-0.6B-Base on synthetic arithmetic.")
     parser.add_argument("--config", required=True)
     args = parser.parse_args()
 
@@ -163,15 +163,16 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     shutil.copy(args.config, os.path.join(output_dir, "config.yaml"))
 
+    configure(**cfg.get("arithmetic", {}))
     tokenizer = load_tokenizer(cfg["model_name"])
     model, target_layers = build_model(cfg, tokenizer)
 
-    train_examples = list(load_gsm8k("train"))
+    train_examples = load_split("train")
     max_train_examples = cfg["data"].get("max_train_examples")
     if max_train_examples:
         train_examples = train_examples[:max_train_examples]
 
-    train_dataset = GSM8KSFTDataset(
+    train_dataset = ArithmeticSFTDataset(
         train_examples, tokenizer, cfg["data"]["max_seq_length"]
     )
 
@@ -211,18 +212,21 @@ def main():
         for f in files
     )
 
-    test_examples = list(load_gsm8k("test"))
+    test_examples = load_split("test")
     eval_limit = cfg["eval"].get("limit")
     if eval_limit:
         test_examples = test_examples[:eval_limit]
     accuracy, _ = run_evaluation(
-        model, tokenizer, test_examples, batch_size=cfg["eval"]["batch_size"]
+        model, tokenizer, test_examples, batch_size=cfg["eval"]["batch_size"],
+        temperature=cfg["eval"].get("temperature", 0),
+        max_new_tokens=cfg["eval"].get("max_new_tokens", 512),
     )
 
     results = {
         "user": cfg["user"],
         "run_name": cfg.get("run_name", os.path.basename(output_dir.rstrip("/"))),
         "base_model": cfg["model_name"],
+        "task": "arithmetic",
         "method": cfg["method"],
         "rank": cfg.get("lora", {}).get("r"),
         "target_modules": cfg.get("lora", {}).get("target_modules"),
@@ -233,7 +237,7 @@ def main():
         "training_time_seconds": training_time_seconds,
         "peak_vram_mb": peak_vram_mb,
         "adapter_bytes": adapter_bytes,
-        "gsm8k_accuracy": accuracy,
+        "accuracy": accuracy,
     }
     save_json(results, os.path.join(output_dir, "results.json"))
     print(results)

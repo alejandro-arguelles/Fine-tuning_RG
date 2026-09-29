@@ -1,4 +1,5 @@
 {
   "model": "Qwen/Qwen3-0.6B-Base",
-  "gsm8k_accuracy": 0.4829416224412434
+  "task": "arithmetic",
+  "accuracy": 0.22666666666666666
 }
