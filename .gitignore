@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 .venv/
+.pdf
+submissions/
 
 # Hugging Face cache (base model weights, datasets) — never commit these
 .cache/
