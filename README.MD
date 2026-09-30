@@ -93,12 +93,14 @@ cp configs/example_lora.yaml configs/YOUR_CONFIG.yaml
 
 Train with your config. It generates `submissions/YOUR_CONFIG/{config.yaml, adapter/, results.json}` and evaluates on the config's test set when finished
 
-```bash
-python -m src.train --config configs/YOUR_CONFIG.yaml
-```
+
+###################################################################
+```bash                                                           #
+python -m src.train --config configs/YOUR_CONFIG.yaml             #
+```                                                               #
+###################################################################
 
 
-If you run out of GPU memory with long sequences (5–6 digit multiplication), lower `per_device_train_batch_size` and raise `gradient_accumulation_steps` to keep the effective batch size
 
 
 

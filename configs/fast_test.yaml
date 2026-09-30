@@ -1,39 +1,42 @@
 user: Ale
-run_name: arith-rank8-5000ex
+run_name: fast_test
 seed: 0
 model_name: Qwen/Qwen3-0.6B-Base
 
 arithmetic:
-  ops: addsub
+  ops: mul
   min_digits: 2
-  max_digits: 8
-  n_train: 5000
+  max_digits: 5
+  test_min_digits: 2
+  test_max_digits: 6
+  n_train: 4000
   n_test: 300
 
 method: lora
 
 lora:
-  r: 8
-  alpha: 16
+  r: 16
+  alpha: 32
   dropout: 0.05
   target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
   layers:
     mode: all
 
 data:
-  max_train_examples: 5000
-  max_seq_length: 256
+  max_train_examples: 100
+  max_seq_length: 640
 
 training:
-  output_dir: submissions/ale_arith_rank8_5000
+  output_dir: submissions/fast_test
   num_train_epochs: 2
-  per_device_train_batch_size: 16
-  gradient_accumulation_steps: 1
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 2
   learning_rate: 2.0e-4
-  logging_steps: 10
+  logging_steps: 20
   bf16: true
 
 eval:
-  limit: 300
+  limit: 30
   batch_size: 50
   temperature: 0
+  max_new_tokens: 512
