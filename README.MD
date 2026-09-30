@@ -1,105 +1,168 @@
-# Fine-tuning RG — Aritmética multi-dígito con SFT
+# Fine-tuning RG: Multi Digit Arithmetic with Supervised Fine Tuning
 
-Todos parten del mismo modelo (`Qwen/Qwen3-0.6B-Base`) y la misma tarea: aritmética sintética de varios dígitos. Cada participante elige su estrategia de fine-tuning (full FT, partial FT, LoRA, QLoRA, distintos rangos/módulos) y se compara accuracy vs coste.
 
-## La tarea
+# The task
+To Fine-tune an LLM to perform better at multiple digit multiplication (47 × 812 → 38,164)
 
-Los datos se generan con un script (`src/arithmetic.py`), no hay que descargar nada. Dos variantes, elegidas con `arithmetic.ops` en el config:
+What you have to do: take the base model (`Qwen/Qwen3-0.6B-Base`) and fine-tune it with LoRA so it gets a better accuracy than the base model. You can change the config (rank, layers, number of examples, etc) and also the code in `src/train.py`. Then you evaluate it and send the result to the leaderboard
 
-- **`mul`** — multiplicación `What is A x B?`, con A y B del mismo número de dígitos. La respuesta sigue una cadena de razonamiento estilo [Goat](https://arxiv.org/abs/2305.14201): descompone B por valor posicional, multiplica A por cada parte y suma los parciales de izquierda a derecha.
-- **`addsub`** — suma y resta `What is A + B?` / `What is A - B?` (en la resta A ≥ B), con respuesta directa.
+Every run is defined by one `.yaml` file in `configs/`. Copy `configs/example_lora.yaml` and change what you want. The main parts are:
 
-Todas las respuestas terminan en `#### <número>`, y la accuracy es coincidencia exacta de ese número. Train y test usan semillas distintas y ninguna pregunta del test aparece en train. El prompt lleva un único ejemplo resuelto.
+```yaml
+user: YOUR_NAME               # your name, it goes in results.json
+seed: 0
+model_name: Qwen/Qwen3-0.6B-Base
 
-Los dígitos de train y de test se controlan por separado. Por ejemplo, entrenar en 2–5 dígitos y evaluar en 2–6 mide si el modelo generaliza a un tamaño que no ha visto.
+arithmetic:
+  ops: mul                    # mul | addsub
+  min_digits: 2               # digits per number in train
+  max_digits: 5
+  test_min_digits: 2          # digits per number in test (6 = more than in train)
+  test_max_digits: 6
+  n_train: 200                # how many train examples are generated
+  n_test: 50
+
+method: lora                  # lora | qlora | full | partial
+
+lora:
+  r: 16                       # rank
+  alpha: 32
+  dropout: 0.05
+  target_modules: ["q_proj", "v_proj"]   # which layers get an adapter
+  layers:
+    mode: all                 # all | first_n | last_n | indices
+    # n: 4                    # only for first_n or last_n
+    # indices: []             # only for indices, e.g. [0, 1, 26, 27]
+
+data:
+  max_train_examples: null    # null = use all the generated examples
+  max_seq_length: 640
+
+training:
+  output_dir: submissions/YOUR_CONFIG    # where adapter and results.json are saved
+  num_train_epochs: 3
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 1
+  learning_rate: 2.0e-4
+  logging_steps: 10
+  bf16: true
+
+eval:
+  limit: null                 # null = all the test examples
+  batch_size: 50
+  temperature: 0              # 0 = greedy
+  max_new_tokens: 512
+```
+
+About the layers:
+- `target_modules` are the projections inside each transformer block where LoRA is added: `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`. More modules = more parameters to train
+- `layers.mode` chooses in which blocks of the model: `all`, only the `first_n`, only the `last_n`, or a list of `indices`
+- `r` is the rank of the LoRA. Bigger rank = more parameters. `alpha` is usually 2 × `r`
+- If you use `method: partial` you need a `partial:` block with `trainable_name_patterns` (a list of parameter names to train)
+
+
 
 ## Setup
+
 
 ```bash
 pip install -r requirements.txt
 ```
-Instala dependencias (torch, transformers, peft, bitsandbytes, etc.).
 
-## Evaluar (fijo para todos, no modificar `src/evaluate.py`)
 
-```bash
-python -m src.evaluate --config configs/ale_mul_rank8_8000.yaml
-```
-Evalúa el modelo base en el test definido por el bloque `arithmetic:` de ese config (greedy, accuracy exact-match).
+## Data
 
-```bash
-python -m src.evaluate --config configs/ale_mul_rank8_8000.yaml --limit 50
-```
-Igual, pero solo en 50 ejemplos (prueba rápida).
+The data is made synthetically with `src/arithmetic.py`
 
-```bash
-python -m src.evaluate --config configs/ale_mul_rank8_8000.yaml --adapter submissions/ale_mul_rank8_8000/adapter
-```
-Evalúa el modelo base + un adapter LoRA/QLoRA entrenado.
 
-## Entrenar (editable, cada uno hace el suyo)
+- **`mul`** — multiplication, `What is A x B?`, where A and B have the same number of digits. The answer is a step by step reasoning like in [Goat](https://arxiv.org/abs/2305.14201): split B by place value, multiply A by each part, and add the partial results from left to right.
+- **`addsub`** — addition and subtraction, `What is A + B?` / `What is A - B?` (in subtraction A ≥ B), with a direct answer.
+
+All answers end with `#### <number>`, and accuracy is an exact match of that number. Train and test use different seeds, and no test question appears in train. The prompt has only one solved example.
+
+The digits for train and test are set separately. For example, training on 2–5 digits and testing on 2–6 digits shows if the model can generalize to a size it has not seen.
+
+## Training
+
+Copy the starter config to edit hyperparameters (`method`, `lora.r`, `target_modules`, `arithmetic` block, `training.output_dir`, etc)
 
 ```bash
-cp configs/example_lora.yaml configs/mi_usuario.yaml
+cp configs/example_lora.yaml configs/YOUR_CONFIG.yaml
 ```
-Copia el config de partida para editar hiperparámetros (`method`, `lora.r`, `target_modules`, bloque `arithmetic`, `training.output_dir`, etc).
+
+
+Train with your config. It generates `submissions/YOUR_CONFIG/{config.yaml, adapter/, results.json}` and evaluates on the config's test set when finished
 
 ```bash
-python -m src.train --config configs/mi_usuario.yaml
+python -m src.train --config configs/YOUR_CONFIG.yaml
 ```
-Entrena según el config y genera `submissions/mi_usuario/{config.yaml, adapter/, results.json}`. Al terminar evalúa sobre el test del config.
 
-Si te quedas sin memoria de GPU con secuencias largas (multiplicación de 5–6 dígitos), baja `per_device_train_batch_size` y sube `gradient_accumulation_steps` para mantener el batch efectivo.
 
-## Enviar al leaderboard (Fine-Tuning Arena)
+If you run out of GPU memory with long sequences (5–6 digit multiplication), lower `per_device_train_batch_size` and raise `gradient_accumulation_steps` to keep the effective batch size
+
+
+
+## Evaluation 
+
+Evalate the BASE model in your config 
 
 ```bash
-python -m src.evaluate --config configs/mi_usuario.yaml --save-baseline
+python -m src.evaluate --config configs/YOUR_CONFIG.yaml
 ```
-Guarda el accuracy del modelo base en `submissions/_baseline.json` (lo necesita `submit.py`). Hay que repetirlo si cambias de tarea (`mul` ↔ `addsub`) o de dígitos de test, porque el baseline solo es comparable con la misma tarea.
+
+
+Same but just with 50 examples. All examples may take some time
 
 ```bash
-python -m src.submit --submission-dir submissions/mi_usuario --student mi_nombre
+python -m src.evaluate --config configs/YOUR_CONFIG.yaml --limit 50
 ```
-Lee `results.json` de esa carpeta (con los campos `task` y `accuracy`) y lo envía por POST a `https://finetuning-arena.onrender.com/api/submissions`.
 
-## Resultados de referencia
 
-Multiplicación, LoRA en las 7 proyecciones y todas las capas, entrenada en 2–5 dígitos y evaluada en 300 ejemplos de 2–6 dígitos (60 por longitud, greedy):
+Evaluate the base model + your Adapter
 
-| Run | Rank | Ejemplos train | Accuracy |
+```bash
+python -m src.evaluate --config configs/YOUR_CONFIG.yaml --adapter submissions/YOUR_CONFIG/adapter
+```
+
+
+## Submit to the leaderboard (Fine-Tuning Arena)
+
+Save the BASE model accuracy in `submissions/_baseline.json` (needed by `submit.py`). Repeat it if you change the task (`mul` ↔ `addsub`) or the test digits, because the baseline is only comparable with the same task
+
+```bash
+python -m src.evaluate --config configs/YOUR_CONFIG.yaml --save-baseline
+```
+
+
+Send your submission. It reads `results.json` from that folder (with the `task` and `accuracy` fields) and POSTs it to `https://finetuning-arena.onrender.com/api/submissions`
+
+```bash
+python -m src.submit --submission-dir submissions/YOUR_CONFIG --student YOUR_NAME
+```
+
+
+## Reference results
+
+Multiplication, LoRA on the 7 projections and all layers, trained on 2–5 digits and tested on 300 examples of 2–6 digits (60 per length, greedy):
+
+| Run | Rank | Train examples | Accuracy |
 |---|---|---|---|
-| Base sin fine-tuning | — | — | 0.227 |
+| Base without fine-tuning | — | — | 0.227 |
 | `ale_mul_rank4_4000` | 4 | 3.943 | 0.673 |
 | `ale_mul_rank16_4000` | 16 | 3.943 | 0.677 |
 | `ale_mul_rank8_8000` | 8 | 7.875 | 0.720 |
 
-Accuracy por número de dígitos (base → `ale_mul_rank8_8000`):
+Accuracy by number of digits (base → `ale_mul_rank8_8000`):
 
-| Dígitos | Base | Fine-tuneado |
+| Digits | Base | Fine-tuned |
 |---|---|---|
 | 2 | 0.82 | 1.00 |
 | 3 | 0.30 | 0.98 |
 | 4 | 0.02 | 0.90 |
 | 5 | 0.00 | 0.60 |
-| 6 (fuera de train) | 0.00 | 0.12 |
+| 6 (not in train) | 0.00 | 0.12 |
 
-Suma y resta (`ale_arith_rank8_5000`, rank 8, 5.000 ejemplos, 2–8 dígitos, 300 ejemplos de test): 0.757 el base y 0.987 el fine-tuneado.
+Addition and subtraction (`ale_arith_rank8_5000`, rank 8, 5,000 examples, 2–8 digits, 300 test examples): 0.757 for the base and 0.987 for the fine-tuned.
 
-Con 60 ejemplos por longitud, las diferencias de pocos puntos entre runs no son significativas.
+With 60 examples per length, differences of a few points between runs are not significant.
 
-## Estructura
-
-```
-src/arithmetic.py  # generador de datos sintéticos (suma/resta y multiplicación)
-src/dataset.py     # ajustes de la tarea + prompt fijo — no modificar
-src/model.py       # carga del modelo base y de adapters — no modificar
-src/evaluate.py    # evaluador oficial — no modificar
-src/utils.py       # helpers (seed, conteo de parámetros, JSON) — no modificar
-src/train.py       # entrenamiento — cada participante lo edita/extiende
-src/submit.py      # envío al leaderboard
-configs/           # configs de entrenamiento (example_*.yaml y runs de referencia)
-submissions/       # salida de cada run (adapter, config, results.json)
-```
-
-`Structured Synthetic Reasoning Data for Arithmetic Fine-Tuning of Small Language Models.pdf` es el artículo de referencia incluido en el repositorio.
