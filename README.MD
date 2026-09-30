@@ -141,6 +141,11 @@ python -m src.submit --submission-dir submissions/YOUR_CONFIG --student YOUR_NAM
 ```
 
 
+## Leaderboard
+
+https://alejandro-arguelles.github.io/finetuning-arena/
+
+
 ## Reference results
 
 Multiplication, LoRA on the 7 projections and all layers, trained on 2–5 digits and tested on 300 examples of 2–6 digits (60 per length, greedy):
